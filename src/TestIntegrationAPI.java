@@ -2,15 +2,15 @@ import com.primavera.PrimaveraException;
 import com.primavera.integration.client.Session;
 import com.primavera.integration.client.EnterpriseLoadManager;
 import com.primavera.integration.client.RMIURL;
+import com.primavera.integration.client.bo.object.*;
 import com.primavera.integration.common.DatabaseInstance;
 import com.primavera.integration.client.bo.BOIterator;
-import com.primavera.integration.client.bo.object.Project;
 
 import java.io.IOException;
 
 public class TestIntegrationAPI {
     private static final String PRIMAVERA_BOOTSTRAP_HOME_KEY = "primavera.bootstrap.home";
-    private static final String PRIMAVERA_BOOTSTRAP_HOME_VALUE = "C:\\P6IntegrationAPI_1";  //mb env?
+    private static final String PRIMAVERA_BOOTSTRAP_HOME_VALUE = "C:\\P6IntegrationAPI_1"; //mb env?
 
     private static final int DB_NAME_ARGS_INDEX = 0;
     private static final int DB_LOGIN_ARGS_INDEX = 1;
@@ -30,13 +30,12 @@ public class TestIntegrationAPI {
             String dbProjectIDs = args[DB_PROJECT_IDS_ARGS_INDEX];
             String dbId = null;
 
-            //DatabaseInstance[] dbInstances = Session.getDatabaseInstances(null);
             DatabaseInstance[] dbInstances = Session.getDatabaseInstances(RMIURL.getRmiUrl(RMIURL.LOCAL_SERVICE));
             for (DatabaseInstance dbi : dbInstances) {
                 if (dbName.equalsIgnoreCase(dbi.getDatabaseName())) {
                     dbId = dbi.getDatabaseId();
-                    //session = Session.login(null, dbId, dbLogin, dbPass);
                     session = Session.login(RMIURL.getRmiUrl(RMIURL.LOCAL_SERVICE), dbId, dbLogin, dbPass);
+                    break;
                 }
             }
             if (dbId == null) throw new PrimaveraException("DB instance '" + dbName + "' not found..");
@@ -47,8 +46,40 @@ public class TestIntegrationAPI {
             if (!boi.hasNext()) throw new PrimaveraException("Projects not found..");
 
             while (boi.hasNext()) {
-                Project proj = boi.next();
-                System.out.println(proj.getName());
+                Project project = boi.next();
+
+                BOIterator<Activity> boiActivities =
+                        project.loadAllActivities(new String[]{"Id", "Name"},
+                                null,
+                                "Name asc");
+                while (boiActivities.hasNext()) {
+                    Activity activity = boiActivities.next();
+                    System.out.println("activity.getName()= " + activity.getName());
+
+                    BOIterator<ResourceAssignment> boiResourceAssignments =
+                            activity.loadResourceAssignments(new String[]{"ResourceType", "RemainingUnits"},
+                                    "ResourceType = 'Labor'", //"Material" is not exist in my sampleDB - "Labor" have 'RemainingUnits' && hardcode_^
+                                    null);
+                    while (boiResourceAssignments.hasNext()) {
+                        ResourceAssignment resourceAssignment = boiResourceAssignments.next();
+                        System.out.println("resourceAssignment.getResourceType()= " + resourceAssignment.getResourceType());
+                        System.out.println("resourceAssignment.getRemainingUnits()= " + resourceAssignment.getRemainingUnits()); //Unit<-PrmNumber<-Number
+                    }
+                }
+
+                BOIterator<ActivityCodeAssignment> boiActivityCodeAssignment =
+                        project.loadAllActivityCodeAssignments(new String[]{"ActivityCodeTypeName"},
+                                null,
+                                null);
+                while (boiActivityCodeAssignment.hasNext()) {
+                    ActivityCodeAssignment activityCodeAssignment = boiActivityCodeAssignment.next();
+                    System.out.println("activityCodeAssignment.getActivityCodeTypeName()= " + activityCodeAssignment.getActivityCodeTypeName());
+
+                    ActivityCodeType activityCodeType = activityCodeAssignment.loadActivityCodeType(new String[]{"Name"});
+                    System.out.println("activityCodeType.getName()= " + activityCodeType.getName());
+                }
+
+                System.out.println(project.getName());
                 //Have no idea what could be here..
             }
         } catch (IOException | PrimaveraException e) {
